@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PeerJS Mobile Video Call</title>
+
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 10px;
+      background-color: #f4f4f4;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      text-align: center;
+    }
+
+    #remote-video-container {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      aspect-ratio: 4 / 3;
+      border: 2px solid #444;
+      border-radius: 8px;
+      background: black;
+      overflow: hidden;
+      margin: 0 auto;
+    }
+
+    #remote-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    #local-video {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      width: 30%;
+      max-width: 120px;
+      aspect-ratio: 4 / 3;
+      border: 2px solid white;
+      border-radius: 6px;
+      object-fit: cover;
+      background: black;
+      z-index: 10;
+    }
+
+    #controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 16px;
+      width: 100%;
+      max-width: 640px;
+      margin-inline: auto;
+    }
+
+    input, button {
+      padding: 12px;
+      font-size: 1rem;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+    }
+
+    @media (min-width: 600px) {
+      #controls {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+      }
+
+      input, button {
+        width: calc(48% - 5px);
+      }
+
+      input[type="text"] {
+        flex-grow: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+
+
+  <h2>PeerJS Mobile Video Call</h2>
+  <p style="text-align:center;">Your Peer ID: <span id="my-peer-id">...</span></p>
+
+  <p id="psychologist-info" style="text-align:center; font-size: 1.2rem; font-weight: bold;">
+    Psychologist: <span id="psychologist-name-value">Loading...</span><br />
+    Specialization: <span id="psychologist-specialization-value">Loading...</span>
+  </p>
+
+  <div id="remote-video-container">
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay muted playsinline></video>
+  </div>
+
+  <div id="controls">
+    <input type="text" id="peer-id-input" placeholder="Enter peer ID to call" />
+    <input type="text" id="name-input" placeholder="Enter your name" />
+    <button id="go-button">Go</button>
+    <button id="call-button">Call</button>
+    <button id="mute-button">Mute</button>
+    <button id="video-button">Video Off</button>
+    <button id="hangup-button" disabled>Hang Up</button>
+    <button id="send-button">Send</button>
+  </div>
+
+
+  <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+  <script>
+    const localVideo = document.getElementById('local-video');
+    const remoteVideo = document.getElementById('remote-video');
+    const peerIdDisplay = document.getElementById('my-peer-id');
+    const callButton = document.getElementById('call-button');
+    const peerIdInput = document.getElementById('peer-id-input');
+    const muteButton = document.getElementById('mute-button');
+    const videoButton = document.getElementById('video-button');
+    const hangupButton = document.getElementById('hangup-button');
+    const goButton = document.getElementById('go-button');
+    const sendButton = document.getElementById('send-button');
+
+    let localStream;
+    let currentCall;
+    let audioEnabled = true;
+    let videoEnabled = true;
+
+    function setPsychologistInfo(name, specialization) {
+      document.getElementById('psychologist-name-value').textContent = name;
+      document.getElementById('psychologist-specialization-value').textContent = specialization;
+    }
+
+
+    function updateReadyStatus(peerId, isReady) {
+      fetch("/api/update_ready_status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          peer_id: peerId,
+          ready_to_talk: isReady
+        })
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("Failed to update ready_to_talk status");
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log(data.message);
+          //alert(data.message); // Optional: display message to user
+        })
+        .catch(error => {
+          console.error("Error updating ready_to_talk status:", error);
+          //alert("An error occurred while updating status.");
+        });
+    }
+
+    // Initialize PeerJS
+    //const peer = new Peer();
+    const storedPeerId = localStorage.getItem('peer_id');
+    const peer = new Peer(storedPeerId || undefined);
+    
+    if (storedPeerId) {
+      document.getElementById('my-peer-id').textContent = storedPeerId;
+    }
+
+    // Get user media (camera + mic)
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => {
+        localStream = stream;
+        localVideo.srcObject = stream;
+      })
+      .catch(err => {
+        alert('Could not get user media: ' + err);
+        console.error(err);
+      });
+
+    // Show own peer ID
+    peer.on('open', id => {
+      peerIdDisplay.textContent = id;
+      localStorage.setItem('peer_id', id);
+      //updateReadyStatus(id, true); // Update status on page refresh
+    });
+
+    // Handle incoming calls
+    peer.on('call', call => {
+      if (currentCall) {
+        currentCall.close();
+      }
+      call.answer(localStream);
+      call.on('stream', remoteStream => {
+        remoteVideo.srcObject = remoteStream;
+      });
+      call.on('close', () => {
+        remoteVideo.srcObject = null;
+        hangupButton.disabled = true;
+        updateReadyStatus(peer.id, true);
+      });
+      call.on('error', err => {
+        alert('Call error: ' + err);
+        console.error(err);
+        hangupButton.disabled = true;
+        updateReadyStatus(peer.id, true);
+      });
+      currentCall = call;
+      hangupButton.disabled = false;
+      updateReadyStatus(peer.id, false);
+    });
+
+    // Call peer on button click
+    callButton.addEventListener('click', () => {
+      const peerId = peerIdInput.value.trim();
+      if (!peerId) {
+        alert('Please enter a peer ID');
+        return;
+      }
+      if (!localStream) {
+        alert('Local media stream not ready yet');
+        return;
+      }
+      if (currentCall) {
+        currentCall.close();
+      }
+      const call = peer.call(peerId, localStream);
+      call.on('stream', remoteStream => {
+        remoteVideo.srcObject = remoteStream;
+      });
+      call.on('close', () => {
+        remoteVideo.srcObject = null;
+        hangupButton.disabled = true;
+      });
+      call.on('error', err => {
+        alert('Call error: ' + err);
+        console.error(err);
+        hangupButton.disabled = true;
+      });
+      currentCall = call;
+      hangupButton.disabled = false;
+    });
+
+    // Mute/unmute audio toggle
+    muteButton.addEventListener('click', () => {
+      if (!localStream) return;
+      audioEnabled = !audioEnabled;
+      localStream.getAudioTracks().forEach(track => {
+        track.enabled = audioEnabled;
+      });
+      muteButton.textContent = audioEnabled ? 'Mute' : 'Unmute';
+    });
+
+    // Video on/off toggle
+    videoButton.addEventListener('click', () => {
+      if (!localStream) return;
+      videoEnabled = !videoEnabled;
+      localStream.getVideoTracks().forEach(track => {
+        track.enabled = videoEnabled;
+      });
+      videoButton.textContent = videoEnabled ? 'Video Off' : 'Video On';
+    });
+
+    // Hang up current call
+    hangupButton.addEventListener('click', () => {
+      if (currentCall) {
+        currentCall.close();
+        currentCall = null;
+        remoteVideo.srcObject = null;
+        hangupButton.disabled = true;
+        updateReadyStatus(peer.id, true);
+      }
+    });
+
+    // Go button: fetch peer_id from backend and call automatically
+    goButton.addEventListener('click', () => {
+      fetch('/api/get_next_psychologist')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not OK');
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (!data.ready_to_talk) {
+            alert(`Psychologist ${data.name} is not ready to talk now.`);
+            return;
+          }
+          const peerId = data.peer_id;
+          peerIdInput.value = peerId;
+
+          if (!localStream) {
+            alert('Local media stream not ready yet');
+            return;
+          }
+          if (currentCall) {
+            currentCall.close();
+          }
+
+          const call = peer.call(peerId, localStream);
+          call.on('stream', remoteStream => {
+            remoteVideo.srcObject = remoteStream;
+          });
+          call.on('close', () => {
+            remoteVideo.srcObject = null;
+            hangupButton.disabled = true;
+          });
+          call.on('error', err => {
+            alert('Call error: ' + err);
+            console.error(err);
+            hangupButton.disabled = true;
+          });
+          currentCall = call;
+          hangupButton.disabled = false;
+
+          setPsychologistInfo(data.name, data.specialization);
+
+          alert(`Calling psychologist: ${data.name} (${data.specialization})\nPeer ID: ${peerId}`);
+        })
+        .catch(err => {
+          alert('Failed to get psychologist data: ' + err);
+          console.error(err);
+        });
+    });
+
+
+    sendButton.addEventListener('click', () => {
+      const name = document.getElementById('name-input').value.trim();
+      //const peerId = peerIdDisplay.textContent;
+      const peerId = peer.id;
+
+      if (!name || !peerId || peerId === "...") {
+        alert("Name or peer ID is missing.");
+        return;
+      }
+
+      const data = {
+        name: name,
+        specialization: "Clinical Psychology", // Optional or fetched dynamically
+        ready_to_talk: true,
+        peer_id: peerId,
+        web_link: "https://example.com/john-doe"
+      };
+
+      fetch('/api/add_new_psychologist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to send data');
+          }
+          return response.json();
+        })
+        .then(result => {
+          alert('Data sent successfully: ' + JSON.stringify(result));
+          updateReadyStatus(peerId, true);
+        })
+        .catch(error => {
+          alert('Error sending data: ' + error);
+          console.error(error);
+        });
+    });
+  </script>
+</body>
+</html>
