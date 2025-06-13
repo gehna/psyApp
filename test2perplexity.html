@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>PeerJS Video Call with Local Video Overlay</title>
+  <style>
+    /* Container for remote video and local video overlay */
+    #remote-video-container {
+      position: relative;
+      width: 640px;  /* Remote video size */
+      height: 480px;
+      border: 2px solid #444;
+      border-radius: 8px;
+      background: black;
+      overflow: hidden;
+    }
+
+    /* Remote video fills the container */
+    #remote-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Local video positioned inside remote video container */
+    #local-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 160px;  /* Quarter size of remote video width */
+      height: 120px; /* Quarter size of remote video height */
+      border: 2px solid white;
+      border-radius: 6px;
+      object-fit: cover;
+      background: black;
+      z-index: 10;
+    }
+
+    /* Controls styling */
+    #controls {
+      margin-top: 10px;
+    }
+
+    input, button {
+      padding: 8px 12px;
+      font-size: 16px;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h2>PeerJS Video Call with Local Video Overlay</h2>
+
+  <p>Your Peer ID: <span id="my-peer-id">...</span></p>
+
+  <div id="remote-video-container">
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay muted playsinline></video>
+  </div>
+
+  <div id="controls">
+    <input type="text" id="peer-id-input" placeholder="Enter peer ID to call" />
+    <button id="call-button">Call</button>
+    <button id="mute-button">Mute</button>
+    <button id="video-button">Video Off</button>
+    <button id="hangup-button" disabled>Hang Up</button>
+  </div>
+
+  <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+  <script>
+    const localVideo = document.getElementById('local-video');
+    const remoteVideo = document.getElementById('remote-video');
+    const peerIdDisplay = document.getElementById('my-peer-id');
+    const callButton = document.getElementById('call-button');
+    const peerIdInput = document.getElementById('peer-id-input');
+    const muteButton = document.getElementById('mute-button');
+    const videoButton = document.getElementById('video-button');
+    const hangupButton = document.getElementById('hangup-button');
+
+    let localStream;
+    let currentCall;
+    let audioEnabled = true;
+    let videoEnabled = true;
+
+    // Initialize PeerJS
+    const peer = new Peer();
+
+    // Get user media (camera + mic)
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => {
+        localStream = stream;
+        localVideo.srcObject = stream;
+      })
+      .catch(err => {
+        alert('Could not get user media: ' + err);
+        console.error(err);
+      });
+
+    // Show own peer ID
+    peer.on('open', id => {
+      peerIdDisplay.textContent = id;
+    });
+
+    // Handle incoming calls
+    peer.on('call', call => {
+      if (currentCall) {
+        currentCall.close();
+      }
+      call.answer(localStream);
+      call.on('stream', remoteStream => {
+        remoteVideo.srcObject = remoteStream;
+      });
+      call.on('close', () => {
+        remoteVideo.srcObject = null;
+        hangupButton.disabled = true;
+      });
+      call.on('error', err => {
+        alert('Call error: ' + err);
+        console.error(err);
+        hangupButton.disabled = true;
+      });
+      currentCall = call;
+      hangupButton.disabled = false;
+    });
+
+    // Call peer on button click
+    callButton.addEventListener('click', () => {
+      const peerId = peerIdInput.value.trim();
+      if (!peerId) {
+        alert('Please enter a peer ID');
+        return;
+      }
+      if (!localStream) {
+        alert('Local media stream not ready yet');
+        return;
+      }
+      if (currentCall) {
+        currentCall.close();
+      }
+      const call = peer.call(peerId, localStream);
+      call.on('stream', remoteStream => {
+        remoteVideo.srcObject = remoteStream;
+      });
+      call.on('close', () => {
+        remoteVideo.srcObject = null;
+        hangupButton.disabled = true;
+      });
+      call.on('error', err => {
+        alert('Call error: ' + err);
+        console.error(err);
+        hangupButton.disabled = true;
+      });
+      currentCall = call;
+      hangupButton.disabled = false;
+    });
+
+    // Mute/unmute audio toggle
+    muteButton.addEventListener('click', () => {
+      if (!localStream) return;
+      audioEnabled = !audioEnabled;
+      localStream.getAudioTracks().forEach(track => {
+        track.enabled = audioEnabled;
+      });
+      muteButton.textContent = audioEnabled ? 'Mute' : 'Unmute';
+    });
+
+    // Video on/off toggle
+    videoButton.addEventListener('click', () => {
+      if (!localStream) return;
+      videoEnabled = !videoEnabled;
+      localStream.getVideoTracks().forEach(track => {
+        track.enabled = videoEnabled;
+      });
+      videoButton.textContent = videoEnabled ? 'Video Off' : 'Video On';
+    });
+
+    // Hang up current call
+    hangupButton.addEventListener('click', () => {
+      if (currentCall) {
+        currentCall.close();
+        currentCall = null;
+        remoteVideo.srcObject = null;
+        hangupButton.disabled = true;
+      }
+    });
+  </script>
+</body>
+</html>

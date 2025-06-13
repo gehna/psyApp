@@ -1,0 +1,65 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PeerJS Connection</title>
+</head>
+<body>
+    <h1>PeerJS P2P Connection Example</h1>
+    <div>
+        <label for="peerIdInput">Enter Peer ID:</label>
+        <input type="text" id="peerIdInput" placeholder="Peer ID">
+        <button id="connectButton">Connect</button>
+    </div>
+    <div id="messages"></div>
+
+    <script src="https://peerjs.com/peer.min.js"></script>
+    <script>
+        const peer = new Peer({
+            key: 'your-peerjs-key-here', // Replace with your PeerJS key
+            debug: 3
+        });
+
+        peer.on('open', (id) => {
+            console.log('Connected to peer with ID:', id);
+            displayMessage(`Your ID: ${id}`);
+        });
+
+        peer.on('error', (err) => {
+            console.error('Error connecting to peer:', err);
+            displayMessage(`Error: ${err.message}`);
+        });
+
+        peer.on('call', (call) => {
+            const answer = call.answer();
+            call.on('stream', (remoteStream) => {
+                const video = document.createElement('video');
+                video.srcObject = new MediaStream([remoteStream]);
+                video.autoplay = true;
+                document.body.appendChild(video);
+            });
+        });
+
+        document.getElementById('connectButton').addEventListener('click', () => {
+            const otherPeerId = document.getElementById('peerIdInput').value;
+            const call = peer.call(otherPeerId);
+            call.on('stream', (remoteStream) => {
+                const video = document.createElement('video');
+                video.srcObject = new MediaStream([remoteStream]);
+                video.autoplay = true;
+                document.body.appendChild(video);
+            });
+        });
+
+        function displayMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const p = document.createElement('p');
+            p.textContent = message;
+            messagesDiv.appendChild(p);
+        }
+    </script>
+</body>
+</html>
+```
