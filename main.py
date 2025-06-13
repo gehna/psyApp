@@ -65,18 +65,24 @@ def get_ready_to_talk_psychologists():
     ready_psychologists = [psychologist for psychologist in psychologists if psychologist.ready_to_talk]
     return ready_psychologists
 
+
+
+
 @app.post("/add_new_psychologist")
 def add_new_psychologist(psychologist: Psychologist):
+    # Check if a psychologist with this peer_id already exists
+    for p in psychologists:
+        if p.peer_id == psychologist.peer_id:
+            p.name = psychologist.name  # Update name
+            return {
+                "message": f"Updated name for psychologist with peer_id {p.peer_id} to '{p.name}'.",
+                "psychologist": p
+            }
 
-    # Auto-increment ID based on current list
+    # Assign a new ID
     new_id = max((p.id for p in psychologists), default=0) + 1
 
-    # Проверка наличия психолога с таким же ID
-    #if any(p.id == psychologist.id for p in psychologists):
-    #    return {"message": "A psychologist with this ID already exists."}
-    
-    # Добавление нового психолога в список
-    # Create new psychologist with auto-assigned ID
+    # Create and add new psychologist
     new_psychologist = Psychologist(
         id=new_id,
         name=psychologist.name,
@@ -87,7 +93,15 @@ def add_new_psychologist(psychologist: Psychologist):
     )
 
     psychologists.append(new_psychologist)
-    return {"message": f"Psychologist {new_psychologist.name} added successfully."}
+
+    return {
+        "message": f"Psychologist {new_psychologist.name} added successfully.",
+        "psychologist": new_psychologist
+    }
+
+
+
+
 
 @app.post("/remove_psychologist")
 def remove_psychologist(psychologist_id: int):
@@ -124,3 +138,4 @@ def update_ready_status(update: ReadyStatusUpdate):
             return {"message": f"Psychologist {psychologist.name}'s status updated to {update.ready_to_talk}"}
     
     raise HTTPException(status_code=404, detail="Psychologist not found")
+

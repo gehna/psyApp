@@ -115,7 +115,6 @@
     <button id="video-button">Video Off</button>
     <button id="hangup-button" disabled>Hang Up</button>
     <button id="send-button">Send</button>
-    <button id="toggle-ready-button">I'm Ready</button>
   </div>
 
 
@@ -171,8 +170,13 @@
     }
 
     // Initialize PeerJS
-    const peer = new Peer();
+    //const peer = new Peer();
+    const storedPeerId = localStorage.getItem('peer_id');
+    const peer = new Peer(storedPeerId || undefined);
     
+    if (storedPeerId) {
+      document.getElementById('my-peer-id').textContent = storedPeerId;
+    }
 
     // Get user media (camera + mic)
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -188,6 +192,8 @@
     // Show own peer ID
     peer.on('open', id => {
       peerIdDisplay.textContent = id;
+      localStorage.setItem('peer_id', id);
+      //updateReadyStatus(id, true); // Update status on page refresh
     });
 
     // Handle incoming calls
@@ -331,7 +337,8 @@
 
     sendButton.addEventListener('click', () => {
       const name = document.getElementById('name-input').value.trim();
-      const peerId = peerIdDisplay.textContent;
+      //const peerId = peerIdDisplay.textContent;
+      const peerId = peer.id;
 
       if (!name || !peerId || peerId === "...") {
         alert("Name or peer ID is missing.");
@@ -361,6 +368,7 @@
         })
         .then(result => {
           alert('Data sent successfully: ' + JSON.stringify(result));
+          updateReadyStatus(peerId, true);
         })
         .catch(error => {
           alert('Error sending data: ' + error);
