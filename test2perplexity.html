@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PeerJS Mobile Video Call</title>
+
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -89,9 +91,15 @@
   </style>
 </head>
 <body>
-  <h2>PeerJS Mobile Video Call</h2>
 
+
+  <h2>PeerJS Mobile Video Call</h2>
   <p style="text-align:center;">Your Peer ID: <span id="my-peer-id">...</span></p>
+
+  <p id="psychologist-info" style="text-align:center; font-size: 1.2rem; font-weight: bold;">
+    Psychologist: <span id="psychologist-name-value">Loading...</span><br />
+    Specialization: <span id="psychologist-specialization-value">Loading...</span>
+  </p>
 
   <div id="remote-video-container">
     <video id="remote-video" autoplay playsinline></video>
@@ -128,6 +136,12 @@
     let currentCall;
     let audioEnabled = true;
     let videoEnabled = true;
+
+    function setPsychologistInfo(name, specialization) {
+      document.getElementById('psychologist-name-value').textContent = name;
+      document.getElementById('psychologist-specialization-value').textContent = specialization;
+    }
+
 
     function updateReadyStatus(peerId, isReady) {
       fetch("http://127.0.0.1:8000/update_ready_status", {
@@ -303,6 +317,8 @@
           });
           currentCall = call;
           hangupButton.disabled = false;
+
+          setPsychologistInfo(data.name, data.specialization);
 
           alert(`Calling psychologist: ${data.name} (${data.specialization})\nPeer ID: ${peerId}`);
         })
