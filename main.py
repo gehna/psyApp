@@ -2,23 +2,39 @@ from fastapi import FastAPI, HTTPException
 from typing import List
 from pydantic import BaseModel
 import random
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 
 app = FastAPI()
 
+# Allow requests from all origins (for development)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Replace with specific origins in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Пример модели данных психолога
 class Psychologist(BaseModel):
-    id: int
+    id: Optional[int] = None
     name: str
     specialization: str
     ready_to_talk: bool
     peer_id: str
-    web_link: str
+    web_link: Optional[str] = None
+
+
+class ReadyStatusUpdate(BaseModel):
+    peer_id: str
+    ready_to_talk: bool
 
 # Список психологов (для примера)
 psychologists: List[Psychologist] = [
-    Psychologist(id=1, name="John Doe", specialization="Clinical Psychology", ready_to_talk=True, peer_id="peer_1", web_link="https://example.com/john-doe"),
-    Psychologist(id=2, name="Jane Smith", specialization="Counseling Psychology", ready_to_talk=False, peer_id="peer_2", web_link="https://example.com/jane-smith"),
-    Psychologist(id=3, name="Emily Johnson", specialization="Child Psychology", ready_to_talk=True, peer_id="peer_3", web_link="https://example.com/emily-johnson"),
+    Psychologist(id=1, name="John Doe", specialization="Clinical Psychology", ready_to_talk=False, peer_id="bd0f7d66-7396-4eb7-99ca-63df9800eab7", web_link="https://example.com/john-doe"),
+    Psychologist(id=2, name="Jane Smith", specialization="Counseling Psychology", ready_to_talk=False, peer_id="bd0f7d66-7396-4eb7-99ca-63df9800eab7", web_link="https://example.com/jane-smith"),
+    Psychologist(id=3, name="Emily Johnson", specialization="Child Psychology", ready_to_talk=False, peer_id="bd0f7d66-7396-4eb7-99ca-63df9800eab7", web_link="https://example.com/emily-johnson"),
 ]
 
 @app.get("/get_next_psychologist")
@@ -51,13 +67,27 @@ def get_ready_to_talk_psychologists():
 
 @app.post("/add_new_psychologist")
 def add_new_psychologist(psychologist: Psychologist):
+
+    # Auto-increment ID based on current list
+    new_id = max((p.id for p in psychologists), default=0) + 1
+
     # Проверка наличия психолога с таким же ID
-    if any(p.id == psychologist.id for p in psychologists):
-        return {"message": "A psychologist with this ID already exists."}
+    #if any(p.id == psychologist.id for p in psychologists):
+    #    return {"message": "A psychologist with this ID already exists."}
     
     # Добавление нового психолога в список
-    psychologists.append(psychologist)
-    return {"message": f"Psychologist {psychologist.name} added successfully."}
+    # Create new psychologist with auto-assigned ID
+    new_psychologist = Psychologist(
+        id=new_id,
+        name=psychologist.name,
+        specialization=psychologist.specialization,
+        ready_to_talk=psychologist.ready_to_talk,
+        peer_id=psychologist.peer_id,
+        web_link=psychologist.web_link
+    )
+
+    psychologists.append(new_psychologist)
+    return {"message": f"Psychologist {new_psychologist.name} added successfully."}
 
 @app.post("/remove_psychologist")
 def remove_psychologist(psychologist_id: int):
@@ -84,4 +114,13 @@ def update_psychologist(psychologist_id: int, updated_psychologist: Psychologist
         if psychologist.id == psychologist_id:
             psychologists[i] = updated_psychologist
             return updated_psychologist
+    raise HTTPException(status_code=404, detail="Psychologist not found")
+
+@app.post("/update_ready_status")
+def update_ready_status(update: ReadyStatusUpdate):
+    for psychologist in psychologists:
+        if psychologist.peer_id == update.peer_id:
+            psychologist.ready_to_talk = update.ready_to_talk
+            return {"message": f"Psychologist {psychologist.name}'s status updated to {update.ready_to_talk}"}
+    
     raise HTTPException(status_code=404, detail="Psychologist not found")

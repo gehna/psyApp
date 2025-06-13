@@ -61,10 +61,15 @@
 
   <div id="controls">
     <input type="text" id="peer-id-input" placeholder="Enter peer ID to call" />
+    <input type="text" id="name-input" placeholder="Enter your name" />
+
+    <button id="go-button">Go</button>
     <button id="call-button">Call</button>
     <button id="mute-button">Mute</button>
     <button id="video-button">Video Off</button>
     <button id="hangup-button" disabled>Hang Up</button>
+    <button id="send-button">Send</button> <!-- New Button -->
+
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
@@ -77,14 +82,44 @@
     const muteButton = document.getElementById('mute-button');
     const videoButton = document.getElementById('video-button');
     const hangupButton = document.getElementById('hangup-button');
+    const goButton = document.getElementById('go-button');
+    const sendButton = document.getElementById('send-button');
 
     let localStream;
     let currentCall;
     let audioEnabled = true;
     let videoEnabled = true;
 
+    function updateReadyStatus(peerId, isReady) {
+      fetch("http://127.0.0.1:8000/update_ready_status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          peer_id: peerId,
+          ready_to_talk: isReady
+        })
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("Failed to update ready_to_talk status");
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log(data.message);
+          //alert(data.message); // Optional: display message to user
+        })
+        .catch(error => {
+          console.error("Error updating ready_to_talk status:", error);
+          //alert("An error occurred while updating status.");
+        });
+    }
+
     // Initialize PeerJS
     const peer = new Peer();
+    
 
     // Get user media (camera + mic)
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -122,6 +157,7 @@
       });
       currentCall = call;
       hangupButton.disabled = false;
+      updateReadyStatus(peer.id, false);
     });
 
     // Call peer on button click
@@ -182,7 +218,97 @@
         currentCall = null;
         remoteVideo.srcObject = null;
         hangupButton.disabled = true;
+        updateReadyStatus(peer.id, true);
       }
+    });
+
+    // Go button: fetch peer_id from backend and call automatically
+    goButton.addEventListener('click', () => {
+      fetch('http://127.0.0.1:8000/get_next_psychologist')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not OK');
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (!data.ready_to_talk) {
+            alert(`Psychologist ${data.name} is not ready to talk now.`);
+            return;
+          }
+          const peerId = data.peer_id;
+          peerIdInput.value = peerId;
+
+          if (!localStream) {
+            alert('Local media stream not ready yet');
+            return;
+          }
+          if (currentCall) {
+            currentCall.close();
+          }
+
+          const call = peer.call(peerId, localStream);
+          call.on('stream', remoteStream => {
+            remoteVideo.srcObject = remoteStream;
+          });
+          call.on('close', () => {
+            remoteVideo.srcObject = null;
+            hangupButton.disabled = true;
+          });
+          call.on('error', err => {
+            alert('Call error: ' + err);
+            console.error(err);
+            hangupButton.disabled = true;
+          });
+          currentCall = call;
+          hangupButton.disabled = false;
+
+          alert(`Calling psychologist: ${data.name} (${data.specialization})\nPeer ID: ${peerId}`);
+        })
+        .catch(err => {
+          alert('Failed to get psychologist data: ' + err);
+          console.error(err);
+        });
+    });
+
+
+    sendButton.addEventListener('click', () => {
+      const name = document.getElementById('name-input').value.trim();
+      const peerId = peerIdDisplay.textContent;
+
+      if (!name || !peerId || peerId === "...") {
+        alert("Name or peer ID is missing.");
+        return;
+      }
+
+      const data = {
+        name: name,
+        specialization: "Clinical Psychology", // Optional or fetched dynamically
+        ready_to_talk: true,
+        peer_id: peerId,
+        web_link: "https://example.com/john-doe"
+      };
+
+      fetch('http://127.0.0.1:8000/add_new_psychologist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to send data');
+          }
+          return response.json();
+        })
+        .then(result => {
+          alert('Data sent successfully: ' + JSON.stringify(result));
+        })
+        .catch(error => {
+          alert('Error sending data: ' + error);
+          console.error(error);
+        });
     });
   </script>
 </body>
