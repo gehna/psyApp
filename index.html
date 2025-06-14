@@ -172,7 +172,15 @@
     // Initialize PeerJS
     //const peer = new Peer();
     const storedPeerId = localStorage.getItem('peer_id');
-    const peer = new Peer(storedPeerId || undefined);
+    //const peer = new Peer(storedPeerId || undefined);
+
+    const peer = new Peer(storedPeerId || undefined, {
+        host: 'find-helper.ru',
+        port: 443,
+        path: '/peerjs',
+        secure: true
+    });
+
     
     if (storedPeerId) {
       document.getElementById('my-peer-id').textContent = storedPeerId;

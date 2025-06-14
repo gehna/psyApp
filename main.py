@@ -6,11 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 
 app = FastAPI()
+#app = FastAPI(openapi_prefix="/api")
 
 # Allow requests from all origins (for development)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Replace with specific origins in production
+    # allow_origins=["https://find-helper.ru",
+    #"https://www.find-helper.ru"],  # Replace with specific origins in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
